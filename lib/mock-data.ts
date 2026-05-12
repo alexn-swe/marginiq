@@ -124,6 +124,37 @@ export function formatChange(current: number, previous: number): string {
   return `${sign}${pct.toFixed(1)}%`;
 }
 
+// ─── Monthly analytics data (12 months) ──────────────────────────────────────
+//
+// May 2025 – Oct 2025: historical entries (no inventory records that far back).
+// Nov 2025 – Apr 2026: values derived from the sold items in the inventory array.
+
+export interface MonthlyData {
+  /** Short label shown on chart axes, e.g. "May '25" */
+  month: string;
+  /** ISO year-month string used for filtering, e.g. "2025-05" */
+  yearMonth: string;
+  /** Total sale price of items sold this month */
+  revenue: number;
+  /** Net profit after all costs for items sold this month */
+  profit: number;
+}
+
+export const monthlyData: MonthlyData[] = [
+  { month: "May '25",  yearMonth: "2025-05", revenue: 450,  profit: 98  },
+  { month: "Jun '25",  yearMonth: "2025-06", revenue: 620,  profit: 142 },
+  { month: "Jul '25",  yearMonth: "2025-07", revenue: 780,  profit: 198 },
+  { month: "Aug '25",  yearMonth: "2025-08", revenue: 940,  profit: 243 },
+  { month: "Sep '25",  yearMonth: "2025-09", revenue: 1120, profit: 289 },
+  { month: "Oct '25",  yearMonth: "2025-10", revenue: 1340, profit: 348 },
+  { month: "Nov '25",  yearMonth: "2025-11", revenue: 823,  profit: 158 },
+  { month: "Dec '25",  yearMonth: "2025-12", revenue: 1024, profit: 213 },
+  { month: "Jan '26",  yearMonth: "2026-01", revenue: 2145, profit: 381 },
+  { month: "Feb '26",  yearMonth: "2026-02", revenue: 365,  profit: 86  },
+  { month: "Mar '26",  yearMonth: "2026-03", revenue: 607,  profit: 90  },
+  { month: "Apr '26",  yearMonth: "2026-04", revenue: 1395, profit: 341 },
+];
+
 // ─── Mock inventory data (35 records) ────────────────────────────────────────
 //
 // Platform fee rates used:
