@@ -17,6 +17,17 @@ import {
 type SortField = "salePrice" | "netProfit" | "margin" | "soldDate";
 type SortDir = "asc" | "desc";
 
+function SortArrow({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
+  if (sortField !== field) {
+    return <span className="ml-1 text-slate-300">↕</span>;
+  }
+  return (
+    <span className="ml-1 text-indigo-600">
+      {sortDir === "asc" ? "↑" : "↓"}
+    </span>
+  );
+}
+
 // Summary card values — always computed from the full sold dataset, not affected by filters
 const allSold = getSoldItems(inventory);
 const totalRevenue = getTotalRevenue(inventory);
@@ -77,18 +88,6 @@ export default function SalesPage() {
       setSortField(field);
       setSortDir("desc");
     }
-  }
-
-  // Small arrow shown in sortable column headers
-  function SortArrow({ field }: { field: SortField }) {
-    if (sortField !== field) {
-      return <span className="ml-1 text-slate-300">↕</span>;
-    }
-    return (
-      <span className="ml-1 text-indigo-600">
-        {sortDir === "asc" ? "↑" : "↓"}
-      </span>
-    );
   }
 
   return (
@@ -215,7 +214,7 @@ export default function SalesPage() {
                   onClick={() => handleSort("salePrice")}
                 >
                   Sale Price
-                  <SortArrow field="salePrice" />
+                  <SortArrow field="salePrice" sortField={sortField} sortDir={sortDir} />
                 </th>
                 <th className="text-right px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
                   Purchase Price
@@ -234,14 +233,14 @@ export default function SalesPage() {
                   onClick={() => handleSort("netProfit")}
                 >
                   Net Profit
-                  <SortArrow field="netProfit" />
+                  <SortArrow field="netProfit" sortField={sortField} sortDir={sortDir} />
                 </th>
                 <th
                   className="text-right px-4 py-3 font-medium text-slate-600 cursor-pointer select-none whitespace-nowrap"
                   onClick={() => handleSort("margin")}
                 >
                   Margin
-                  <SortArrow field="margin" />
+                  <SortArrow field="margin" sortField={sortField} sortDir={sortDir} />
                 </th>
                 <th className="text-right px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
                   ROI
@@ -251,7 +250,7 @@ export default function SalesPage() {
                   onClick={() => handleSort("soldDate")}
                 >
                   Sold Date
-                  <SortArrow field="soldDate" />
+                  <SortArrow field="soldDate" sortField={sortField} sortDir={sortDir} />
                 </th>
               </tr>
             </thead>

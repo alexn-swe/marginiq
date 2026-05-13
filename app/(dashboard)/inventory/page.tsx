@@ -39,6 +39,17 @@ const STATUS_BADGE: Record<Status, string> = {
 type SortField = "purchasePrice" | "listPrice" | "inventoryAge" | "estimatedProfit";
 type SortDir = "asc" | "desc";
 
+function SortArrow({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
+  if (sortField !== field) {
+    return <span className="ml-1 text-slate-300">↕</span>;
+  }
+  return (
+    <span className="ml-1 text-indigo-600">
+      {sortDir === "asc" ? "↑" : "↓"}
+    </span>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function InventoryPage() {
@@ -105,18 +116,6 @@ export default function InventoryPage() {
       setSortField(field);
       setSortDir("desc");
     }
-  }
-
-  // Small arrow indicator shown in sortable column headers
-  function SortArrow({ field }: { field: SortField }) {
-    if (sortField !== field) {
-      return <span className="ml-1 text-slate-300">↕</span>;
-    }
-    return (
-      <span className="ml-1 text-indigo-600">
-        {sortDir === "asc" ? "↑" : "↓"}
-      </span>
-    );
   }
 
   return (
@@ -237,14 +236,14 @@ export default function InventoryPage() {
                   onClick={() => handleSort("purchasePrice")}
                 >
                   Purchase Price
-                  <SortArrow field="purchasePrice" />
+                  <SortArrow field="purchasePrice" sortField={sortField} sortDir={sortDir} />
                 </th>
                 <th
                   className="text-right px-4 py-3 font-medium text-slate-600 cursor-pointer select-none whitespace-nowrap"
                   onClick={() => handleSort("listPrice")}
                 >
                   List Price
-                  <SortArrow field="listPrice" />
+                  <SortArrow field="listPrice" sortField={sortField} sortDir={sortDir} />
                 </th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">
                   Status
@@ -254,14 +253,14 @@ export default function InventoryPage() {
                   onClick={() => handleSort("inventoryAge")}
                 >
                   Age (days)
-                  <SortArrow field="inventoryAge" />
+                  <SortArrow field="inventoryAge" sortField={sortField} sortDir={sortDir} />
                 </th>
                 <th
                   className="text-right px-4 py-3 font-medium text-slate-600 cursor-pointer select-none whitespace-nowrap"
                   onClick={() => handleSort("estimatedProfit")}
                 >
                   Est. Profit
-                  <SortArrow field="estimatedProfit" />
+                  <SortArrow field="estimatedProfit" sortField={sortField} sortDir={sortDir} />
                 </th>
               </tr>
             </thead>
