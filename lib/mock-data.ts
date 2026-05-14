@@ -1,3 +1,15 @@
+import { calculateMarketplaceFees } from "./fee-calculations";
+
+// ─── Fee helper (for mock data only) ─────────────────────────────────────────
+//
+// Pulls just the two fee fields needed by InventoryItem from the centralized
+// calculator. Used inline below so each sold item's fees stay in sync with
+// the formula in lib/fee-calculations.ts.
+function feeFields(platform: string, salePrice: number) {
+  const { platformFee, paymentFee } = calculateMarketplaceFees(platform, salePrice);
+  return { platformFee, paymentFee };
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Platform = "eBay" | "StockX" | "Facebook Marketplace" | "GOAT";
@@ -154,15 +166,8 @@ export const monthlyData: MonthlyData[] = [
 
 // ─── Mock inventory data (35 records) ────────────────────────────────────────
 //
-// Platform fee rates used:
-//   eBay              13.25% of sale price
-//   StockX             9.00% of sale price
-//   GOAT               9.50% of sale price
-//   Facebook Marketplace  0% (local cash pickup)
-//
-// Payment fee rates:
-//   eBay / StockX / GOAT  3.00% of sale price (simplified)
-//   Facebook Marketplace  0%
+// Fees on sold items are computed via calculateMarketplaceFees() in
+// lib/fee-calculations.ts — see that file for the formula details.
 
 export const inventory: InventoryItem[] = [
   // ── Sneakers ──────────────────────────────────────────────────────────────
@@ -176,9 +181,8 @@ export const inventory: InventoryItem[] = [
     purchasePrice: 180,
     listPrice: 320,
     salePrice: 310,
-    shippingCost: 15,
-    platformFee: 27.9,   // 9%
-    paymentFee: 9.3,     // 3%
+    shippingCost: 5,
+    ...feeFields("StockX", 310),
     status: "Sold",
     purchaseDate: "2025-11-03",
     listedDate: "2025-11-10",
@@ -193,9 +197,8 @@ export const inventory: InventoryItem[] = [
     purchasePrice: 220,
     listPrice: 380,
     salePrice: 365,
-    shippingCost: 15,
-    platformFee: 32.85,  // 9%
-    paymentFee: 10.95,   // 3%
+    shippingCost: 5,
+    ...feeFields("StockX", 365),
     status: "Sold",
     purchaseDate: "2025-12-01",
     listedDate: "2025-12-08",
@@ -210,9 +213,8 @@ export const inventory: InventoryItem[] = [
     purchasePrice: 110,
     listPrice: 200,
     salePrice: 185,
-    shippingCost: 12,
-    platformFee: 17.58,  // 9.5%
-    paymentFee: 5.37,    // 3% (rounded from 5.55 — GOAT uses 2.9%)
+    shippingCost: 0,
+    ...feeFields("GOAT", 185),
     status: "Sold",
     purchaseDate: "2025-10-15",
     listedDate: "2025-10-20",
@@ -262,8 +264,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 150,
     salePrice: 145,
     shippingCost: 12,
-    platformFee: 19.21,  // 13.25%
-    paymentFee: 4.35,    // 3%
+    ...feeFields("eBay", 145),
     status: "Sold",
     purchaseDate: "2025-10-05",
     listedDate: "2025-10-12",
@@ -279,8 +280,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 120,
     salePrice: 112,
     shippingCost: 10,
-    platformFee: 14.84,  // 13.25%
-    paymentFee: 3.36,    // 3%
+    ...feeFields("eBay", 112),
     status: "Sold",
     purchaseDate: "2025-12-05",
     listedDate: "2025-12-10",
@@ -312,9 +312,8 @@ export const inventory: InventoryItem[] = [
     purchasePrice: 220,
     listPrice: 340,
     salePrice: 325,
-    shippingCost: 15,
-    platformFee: 29.25,  // 9%
-    paymentFee: 9.75,    // 3%
+    shippingCost: 5,
+    ...feeFields("StockX", 325),
     status: "Sold",
     purchaseDate: "2025-12-10",
     listedDate: "2025-12-18",
@@ -346,9 +345,8 @@ export const inventory: InventoryItem[] = [
     purchasePrice: 200,
     listPrice: 460,
     salePrice: 440,
-    shippingCost: 15,
-    platformFee: 39.6,   // 9%
-    paymentFee: 13.2,    // 3%
+    shippingCost: 5,
+    ...feeFields("StockX", 440),
     status: "Sold",
     purchaseDate: "2026-03-05",
     listedDate: "2026-03-12",
@@ -367,8 +365,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 420,
     salePrice: 400,
     shippingCost: 5,
-    platformFee: 53.0,   // 13.25%
-    paymentFee: 12.0,    // 3%
+    ...feeFields("eBay", 400),
     status: "Sold",
     purchaseDate: "2025-10-20",
     listedDate: "2025-10-28",
@@ -401,8 +398,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 550,
     salePrice: 520,
     shippingCost: 8,
-    platformFee: 68.9,   // 13.25%
-    paymentFee: 15.6,    // 3%
+    ...feeFields("eBay", 520),
     status: "Sold",
     purchaseDate: "2025-11-10",
     listedDate: "2025-11-18",
@@ -418,8 +414,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 85,
     salePrice: 78,
     shippingCost: 4,
-    platformFee: 10.34,  // 13.25%
-    paymentFee: 2.34,    // 3%
+    ...feeFields("eBay", 78),
     status: "Sold",
     purchaseDate: "2025-10-12",
     listedDate: "2025-10-18",
@@ -435,8 +430,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 310,
     salePrice: 290,
     shippingCost: 5,
-    platformFee: 38.43,  // 13.25%
-    paymentFee: 8.7,     // 3%
+    ...feeFields("eBay", 290),
     status: "Sold",
     purchaseDate: "2026-02-10",
     listedDate: "2026-02-18",
@@ -452,8 +446,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 185,
     salePrice: 172,
     shippingCost: 8,
-    platformFee: 22.79,  // 13.25%
-    paymentFee: 5.16,    // 3%
+    ...feeFields("eBay", 172),
     status: "Sold",
     purchaseDate: "2026-01-08",
     listedDate: "2026-01-15",
@@ -489,8 +482,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 580,
     salePrice: 560,
     shippingCost: 0,
-    platformFee: 0,
-    paymentFee: 0,
+    ...feeFields("Facebook Marketplace", 560),
     status: "Sold",
     purchaseDate: "2025-11-05",
     listedDate: "2025-11-05",
@@ -506,8 +498,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 620,
     salePrice: 610,
     shippingCost: 20,
-    platformFee: 80.83,  // 13.25%
-    paymentFee: 18.3,    // 3%
+    ...feeFields("eBay", 610),
     status: "Sold",
     purchaseDate: "2025-12-15",
     listedDate: "2025-12-20",
@@ -523,8 +514,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 380,
     salePrice: 360,
     shippingCost: 0,
-    platformFee: 0,
-    paymentFee: 0,
+    ...feeFields("Facebook Marketplace", 360),
     status: "Sold",
     purchaseDate: "2025-12-08",
     listedDate: "2025-12-08",
@@ -540,8 +530,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 270,
     salePrice: 250,
     shippingCost: 10,
-    platformFee: 33.13,  // 13.25%
-    paymentFee: 7.5,     // 3%
+    ...feeFields("eBay", 250),
     status: "Sold",
     purchaseDate: "2026-01-20",
     listedDate: "2026-01-28",
@@ -608,8 +597,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 360,
     salePrice: 340,
     shippingCost: 0,
-    platformFee: 0,
-    paymentFee: 0,
+    ...feeFields("Facebook Marketplace", 340),
     status: "Sold",
     purchaseDate: "2026-02-15",
     listedDate: "2026-02-15",
@@ -628,8 +616,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 45,
     salePrice: 40,
     shippingCost: 6,
-    platformFee: 5.3,    // 13.25%
-    paymentFee: 1.2,     // 3%
+    ...feeFields("eBay", 40),
     status: "Sold",
     purchaseDate: "2025-10-08",
     listedDate: "2025-10-15",
@@ -662,8 +649,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 280,
     salePrice: 255,
     shippingCost: 18,
-    platformFee: 33.79,  // 13.25%
-    paymentFee: 7.65,    // 3%
+    ...feeFields("eBay", 255),
     status: "Sold",
     purchaseDate: "2025-11-15",
     listedDate: "2025-11-22",
@@ -698,9 +684,8 @@ export const inventory: InventoryItem[] = [
     purchasePrice: 68,
     listPrice: 165,
     salePrice: 152,
-    shippingCost: 12,
-    platformFee: 13.68,  // 9%
-    paymentFee: 4.56,    // 3%
+    shippingCost: 5,
+    ...feeFields("StockX", 152),
     status: "Sold",
     purchaseDate: "2025-10-22",
     listedDate: "2025-10-30",
@@ -750,8 +735,7 @@ export const inventory: InventoryItem[] = [
     listPrice: 480,
     salePrice: 450,
     shippingCost: 18,
-    platformFee: 59.63,  // 13.25%
-    paymentFee: 13.5,    // 3%
+    ...feeFields("eBay", 450),
     status: "Sold",
     purchaseDate: "2025-11-20",
     listedDate: "2025-11-28",
