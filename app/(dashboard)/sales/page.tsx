@@ -13,6 +13,7 @@ import {
   type Platform,
   type Category,
 } from "@/lib/mock-data";
+import { calculateMarketplaceFees } from "@/lib/fee-calculations";
 import SortArrow from "@/app/components/SortArrow";
 
 type SortField = "salePrice" | "netProfit" | "margin" | "soldDate";
@@ -218,6 +219,9 @@ export default function SalesPage() {
                 <th className="text-right px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
                   Payment Fee
                 </th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
+                  Payout
+                </th>
                 <th
                   className="text-right px-4 py-3 font-medium text-slate-600 cursor-pointer select-none whitespace-nowrap"
                   onClick={() => handleSort("netProfit")}
@@ -249,7 +253,7 @@ export default function SalesPage() {
               {sorted.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={12}
                     className="text-center py-12 text-slate-400 text-sm"
                   >
                     No sales match your filters.
@@ -260,6 +264,12 @@ export default function SalesPage() {
                   const profit = calcNetProfit(item);
                   const margin = calcProfitMargin(item);
                   const roi = calcROI(item);
+                  // Payout = salePrice minus all marketplace fees (platform + payment + shipping fee).
+                  // Uses the centralized helper so the formula stays in one place.
+                  const { payout } = calculateMarketplaceFees(
+                    item.platform,
+                    item.salePrice ?? 0
+                  );
 
                   // Green for positive profit, red for negative, grey for zero
                   const profitColor =
@@ -314,6 +324,11 @@ export default function SalesPage() {
                       {/* Payment Fee */}
                       <td className="px-4 py-3 text-right text-slate-600 whitespace-nowrap">
                         {formatCurrency(item.paymentFee)}
+                      </td>
+
+                      {/* Payout — what the marketplace deposits to the seller */}
+                      <td className="px-4 py-3 text-right font-medium text-slate-800 whitespace-nowrap">
+                        {formatCurrency(payout)}
                       </td>
 
                       {/* Net Profit — bold + color-coded */}
