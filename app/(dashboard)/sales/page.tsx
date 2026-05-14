@@ -13,20 +13,10 @@ import {
   type Platform,
   type Category,
 } from "@/lib/mock-data";
+import SortArrow from "@/app/components/SortArrow";
 
 type SortField = "salePrice" | "netProfit" | "margin" | "soldDate";
 type SortDir = "asc" | "desc";
-
-function SortArrow({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
-  if (sortField !== field) {
-    return <span className="ml-1 text-slate-300">↕</span>;
-  }
-  return (
-    <span className="ml-1 text-indigo-600">
-      {sortDir === "asc" ? "↑" : "↓"}
-    </span>
-  );
-}
 
 // Summary card values — always computed from the full sold dataset, not affected by filters
 const allSold = getSoldItems(inventory);

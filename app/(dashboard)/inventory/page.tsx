@@ -12,6 +12,7 @@ import {
   type Platform,
   type Category,
 } from "@/lib/mock-data";
+import SortArrow from "@/app/components/SortArrow";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,17 +39,6 @@ const STATUS_BADGE: Record<Status, string> = {
 
 type SortField = "purchasePrice" | "listPrice" | "inventoryAge" | "estimatedProfit";
 type SortDir = "asc" | "desc";
-
-function SortArrow({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
-  if (sortField !== field) {
-    return <span className="ml-1 text-slate-300">↕</span>;
-  }
-  return (
-    <span className="ml-1 text-indigo-600">
-      {sortDir === "asc" ? "↑" : "↓"}
-    </span>
-  );
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -341,13 +331,15 @@ export default function InventoryPage() {
                         {age}d
                       </td>
 
-                      {/* Estimated Profit — prefix "~" for unsold items */}
+                      {/* Estimated Profit — "~" prefix for unsold, "—" when no list price */}
                       <td
                         className={`px-4 py-3 text-right font-medium whitespace-nowrap ${profitColor}`}
                       >
                         {item.status === "Sold"
                           ? formatCurrency(profit)
-                          : `~${formatCurrency(profit)}`}
+                          : item.listPrice > 0
+                          ? `~${formatCurrency(profit)}`
+                          : "—"}
                       </td>
                     </tr>
                   );

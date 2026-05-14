@@ -55,7 +55,7 @@ export function calcNetProfit(item: InventoryItem): number {
  * Returns 0 for unsold items.
  */
 export function calcProfitMargin(item: InventoryItem): number {
-  if (!item.salePrice) return 0;
+  if (item.salePrice === null) return 0;
   return calcNetProfit(item) / item.salePrice;
 }
 
@@ -64,7 +64,7 @@ export function calcProfitMargin(item: InventoryItem): number {
  * Returns 0 for unsold items.
  */
 export function calcROI(item: InventoryItem): number {
-  if (!item.salePrice || item.purchasePrice === 0) return 0;
+  if (item.salePrice === null || item.purchasePrice === 0) return 0;
   return calcNetProfit(item) / item.purchasePrice;
 }
 
@@ -75,7 +75,7 @@ export function calcROI(item: InventoryItem): number {
  */
 export function calcInventoryAge(item: InventoryItem): number {
   const start = new Date(item.purchaseDate);
-  const end = item.soldDate ? new Date(item.soldDate) : new Date("2026-05-11");
+  const end = item.soldDate ? new Date(item.soldDate) : new Date("2026-05-12");
   return Math.floor((end.getTime() - start.getTime()) / 86_400_000);
 }
 
@@ -86,9 +86,6 @@ export const getSoldItems = (items: InventoryItem[]) =>
 
 export const getActiveItems = (items: InventoryItem[]) =>
   items.filter((i) => i.status === "Active");
-
-export const getDraftItems = (items: InventoryItem[]) =>
-  items.filter((i) => i.status === "Draft");
 
 /** Sum of salePrice across all sold items */
 export const getTotalRevenue = (items: InventoryItem[]) =>

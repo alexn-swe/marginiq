@@ -67,6 +67,15 @@ const metrics = [
   },
 ];
 
+// ─── Inventory status summary cards ──────────────────────────────────────────
+
+const statusCards = [
+  { label: "Active",   count: activeItems.length,                                    color: "text-emerald-600 bg-emerald-50" },
+  { label: "Sold",     count: soldItems.length,                                      color: "text-indigo-600 bg-indigo-50"  },
+  { label: "Draft",    count: inventory.filter((i) => i.status === "Draft").length,  color: "text-amber-600 bg-amber-50"    },
+  { label: "Archived", count: inventory.filter((i) => i.status === "Archived").length, color: "text-slate-500 bg-slate-100" },
+];
+
 // ─── Recent sales (last 6 sold items by soldDate, newest first) ───────────────
 
 const recentSales = [...soldItems]
@@ -210,22 +219,7 @@ export default function DashboardPage() {
 
       {/* Inventory status summary */}
       <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {(
-          [
-            { label: "Active", count: activeItems.length, color: "text-emerald-600 bg-emerald-50" },
-            { label: "Sold", count: soldItems.length, color: "text-indigo-600 bg-indigo-50" },
-            {
-              label: "Draft",
-              count: inventory.filter((i) => i.status === "Draft").length,
-              color: "text-amber-600 bg-amber-50",
-            },
-            {
-              label: "Archived",
-              count: inventory.filter((i) => i.status === "Archived").length,
-              color: "text-slate-500 bg-slate-100",
-            },
-          ] as const
-        ).map((s) => (
+        {statusCards.map((s) => (
           <div
             key={s.label}
             className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3"
