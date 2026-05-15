@@ -1,0 +1,85 @@
+// prisma/schema.prisma
+//
+// This file is the single source of truth for your database structure.
+// Prisma reads it to:
+//   1. Generate TypeScript types  (npx prisma generate)
+//   2. Create/update real tables  (npx prisma migrate dev)
+//
+// Docs: https://www.prisma.io/docs/concepts/components/prisma-schema
+
+// ─── Generator ────────────────────────────────────────────────────────────────
+// Tells Prisma to generate a JavaScript/TypeScript client.
+// After any schema change, run: npx prisma generate
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Datasource ───────────────────────────────────────────────────────────────
+// Tells Prisma the database type. The connection URL is NOT written here in
+// Prisma 7 — it lives in prisma.config.ts (for migrations) and in the adapter
+// passed to PrismaClient in lib/prisma.ts (for runtime queries).
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+// Enums restrict a column to a fixed set of allowed values, enforced by the DB.
+//
+// The @map values match the strings used in the existing mock data exactly,
+// so migrating the frontend later will not require any data transformation.
+// (Prisma enum names can't contain spaces, but @map lets us store spaces in DB.)
+
+enum Platform {
+  eBay                @map("eBay")
+  StockX              @map("StockX")
+  FacebookMarketplace @map("Facebook Marketplace")
+  GOAT                @map("GOAT")
+}
+
+enum Category {
+  Sneakers     @map("Sneakers")
+  TradingCards @map("Trading Cards")
+  Electronics  @map("Electronics")
+  Collectibles @map("Collectibles")
+  Apparel      @map("Apparel")
+}
+
+enum Status {
+  Active   @map("Active")
+  Sold     @map("Sold")
+  Draft    @map("Draft")
+  Archived @map("Archived")
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+// InventoryItem represents a single item purchased for resale.
+// Schema mirrors the InventoryItem interface in lib/mock-data.ts.
+model InventoryItem {
+  id       String   @id @default(cuid()) // cuid() generates a unique ID like "clx..."
+  itemName String
+  sku      String   @unique              // SKU must be unique across all items
+
+  category Category
+  platform Platform
+
+  purchasePrice Decimal  @db.Decimal(10, 2) // Decimal avoids floating-point errors in money math
+  listPrice     Decimal  @db.Decimal(10, 2) // (e.g. 0.1 + 0.2 = 0.30000000000000004 in Float)
+  salePrice     Decimal? @db.Decimal(10, 2) // null when the item has not been sold yet
+  shippingCost  Decimal  @db.Decimal(10, 2)
+  platformFee   Decimal  @db.Decimal(10, 2) // Marketplace commission deducted from payout
+  paymentFee    Decimal  @db.Decimal(10, 2) // Payment processor fee deducted from payout
+
+  status Status
+
+  purchaseDate DateTime
+  listedDate   DateTime? // null while item is still in Draft status
+  soldDate     DateTime? // null until the item is sold
+
+  // Automatically managed timestamps — Prisma sets/updates these for you
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Stores rows in a snake_case table called "inventory_items" (PostgreSQL convention)
+  @@map("inventory_items")
+}
