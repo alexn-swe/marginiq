@@ -51,35 +51,110 @@ enum Status {
   Archived @map("Archived")
 }
 
-// ─── Models ───────────────────────────────────────────────────────────────────
+// ─── User ─────────────────────────────────────────────────────────────────────
+// Auth-ready shell: no password or OAuth provider fields yet.
+// When you add NextAuth (or similar), extend this model with sessions,
+// accounts, and a hashed password or OAuth tokens — the rest stays the same.
+//
+// Seed plan: prisma/seed.ts creates one demo user with a fixed cuid so all
+// development data can be owned by a known entity without logging in.
 
-// InventoryItem represents a single item purchased for resale.
-// Schema mirrors the InventoryItem interface in lib/mock-data.ts.
+model User {
+  id    String  @id @default(cuid())
+  email String  @unique
+  name  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reverse relations — lets you query user.inventoryItems and user.sales
+  inventoryItems InventoryItem[]
+  sales          Sale[]
+
+  @@map("users")
+}
+
+// ─── InventoryItem ────────────────────────────────────────────────────────────
+// One row = one physical item purchased for resale.
+//
+// Purchase data lives here. Sale data (fees, payout, profit) lives in Sale —
+// keeping the two concerns cleanly separated so unsold items don't need
+// placeholder zeros for fields that don't apply to them yet.
+
 model InventoryItem {
-  id       String   @id @default(cuid()) // cuid() generates a unique ID like "clx..."
+  id     String @id @default(cuid())
+  userId String // FK → users.id
+
   itemName String
-  sku      String   @unique              // SKU must be unique across all items
+  sku      String // unique per user (see @@unique below), not globally
 
   category Category
-  platform Platform
+  platform Platform // platform where this item is listed for sale
 
-  purchasePrice Decimal  @db.Decimal(10, 2) // Decimal avoids floating-point errors in money math
-  listPrice     Decimal  @db.Decimal(10, 2) // (e.g. 0.1 + 0.2 = 0.30000000000000004 in Float)
-  salePrice     Decimal? @db.Decimal(10, 2) // null when the item has not been sold yet
-  shippingCost  Decimal  @db.Decimal(10, 2)
-  platformFee   Decimal  @db.Decimal(10, 2) // Marketplace commission deducted from payout
-  paymentFee    Decimal  @db.Decimal(10, 2) // Payment processor fee deducted from payout
+  purchasePrice Decimal @db.Decimal(10, 2) // Decimal avoids floating-point errors
+  listPrice     Decimal @db.Decimal(10, 2) // (e.g. 0.1 + 0.2 = 0.30000…004 in Float)
 
   status Status
 
   purchaseDate DateTime
-  listedDate   DateTime? // null while item is still in Draft status
-  soldDate     DateTime? // null until the item is sold
+  listedDate   DateTime? // null while still in Draft status
 
-  // Automatically managed timestamps — Prisma sets/updates these for you
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Stores rows in a snake_case table called "inventory_items" (PostgreSQL convention)
+  // ── Relations ─────────────────────────────────────────────────────────────
+  user User @relation(fields: [userId], references: [id])
+
+  // sale is null until the item is sold and a Sale record is created
+  sale Sale?
+
+  // SKU only needs to be unique within one user's inventory, not globally
+  @@unique([userId, sku])
   @@map("inventory_items")
+}
+
+// ─── Sale ─────────────────────────────────────────────────────────────────────
+// Created when an InventoryItem is sold. One sale per item, enforced by
+// @unique on inventoryItemId.
+//
+// Why userId is repeated here (denormalized from InventoryItem):
+//   Dashboard queries like "all sales this month" filter on userId directly
+//   without joining through inventory_items, keeping aggregates fast.
+//
+// The four computed fields (totalFees, payout, netProfit, profitMargin, roi)
+// are calculated by the application layer and stored here so dashboard reads
+// never need to recompute them. profitMargin and roi are stored as percentage
+// values — e.g. 25.5000 means 25.5%, not 0.255.
+
+model Sale {
+  id              String @id @default(cuid())
+  userId          String // FK → users.id (denormalized for query convenience)
+  inventoryItemId String @unique // FK → inventory_items.id — one sale per item
+
+  // Platform where the sale actually occurred — may differ from the listing
+  // platform on InventoryItem (e.g. listed on StockX, sold on eBay)
+  platform Platform
+
+  // ── Raw financial inputs ──────────────────────────────────────────────────
+  salePrice    Decimal @db.Decimal(10, 2)
+  shippingCost Decimal @db.Decimal(10, 2) @default(0) // 0 for local / pickup sales
+  platformFee  Decimal @db.Decimal(10, 2) @default(0) // marketplace commission
+  paymentFee   Decimal @db.Decimal(10, 2) @default(0) // payment processor fee
+
+  // ── Computed and stored for fast dashboard reads ──────────────────────────
+  totalFees    Decimal @db.Decimal(10, 2) // shippingCost + platformFee + paymentFee
+  payout       Decimal @db.Decimal(10, 2) // salePrice − totalFees
+  netProfit    Decimal @db.Decimal(10, 2) // payout − purchasePrice
+  profitMargin Decimal @db.Decimal(10, 4) // as %, e.g. 25.5000 = 25.5%
+  roi          Decimal @db.Decimal(10, 4) // as %, e.g. 130.0000 = 130%
+
+  soldDate  DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Relations ─────────────────────────────────────────────────────────────
+  user          User          @relation(fields: [userId], references: [id])
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@map("sales")
 }
