@@ -1,90 +1,102 @@
-import {
-  inventory,
-  calcNetProfit,
-  calcProfitMargin,
-  calcROI,
-  calcInventoryAge,
-  getSoldItems,
-  getActiveItems,
-  getSoldInMonth,
-  getTotalRevenue,
-  getTotalNetProfit,
-  getActiveInventoryValue,
-  formatCurrency,
-  formatChange,
-} from "@/lib/mock-data";
+import { getInventoryItems } from "@/lib/db/inventory";
+import { getSales } from "@/lib/db/sales";
+import { Status } from "@prisma/client";
+import { formatCurrency, formatChange } from "@/lib/mock-data";
 
-// ─── Compute summary metrics ─────────────────────────────────────────────────
+export default async function DashboardPage() {
+  const [items, sales] = await Promise.all([
+    getInventoryItems(),
+    getSales(),
+  ]);
 
-const soldItems = getSoldItems(inventory);
-const activeItems = getActiveItems(inventory);
+  // ── Status buckets ────────────────────────────────────────────────────────
+  const activeItems   = items.filter((i) => i.status === Status.Active);
+  const soldCount     = items.filter((i) => i.status === Status.Sold).length;
+  const draftCount    = items.filter((i) => i.status === Status.Draft).length;
+  const archivedCount = items.filter((i) => i.status === Status.Archived).length;
 
-const totalRevenue = getTotalRevenue(inventory);
-const totalNetProfit = getTotalNetProfit(inventory);
-const activeInventoryValue = getActiveInventoryValue(inventory);
-const itemsSoldCount = soldItems.length;
+  // ── Aggregates ────────────────────────────────────────────────────────────
+  // Sale model stores precomputed netProfit, profitMargin (as %), roi (as %).
+  const totalRevenue         = sales.reduce((s, x) => s + x.salePrice.toNumber(), 0);
+  const totalNetProfit       = sales.reduce((s, x) => s + x.netProfit.toNumber(), 0);
+  const activeInventoryValue = activeItems.reduce((s, i) => s + i.listPrice.toNumber(), 0);
+  const itemsSoldCount       = sales.length;
 
-// Month-over-month comparison: April 2026 (last full month) vs March 2026
-const aprSold = getSoldInMonth(inventory, "2026-04");
-const marSold = getSoldInMonth(inventory, "2026-03");
+  // profitMargin is stored as a percentage (25.5 = 25.5%), not a 0–1 decimal.
+  const avgMargin = sales.length > 0
+    ? sales.reduce((s, x) => s + x.profitMargin.toNumber(), 0) / sales.length
+    : 0;
 
-const aprRevenue = aprSold.reduce((s, i) => s + (i.salePrice ?? 0), 0);
-const marRevenue = marSold.reduce((s, i) => s + (i.salePrice ?? 0), 0);
+  // ── Inventory aging ───────────────────────────────────────────────────────
+  const today = new Date();
 
-const aprProfit = aprSold.reduce((s, i) => s + calcNetProfit(i), 0);
-const marProfit = marSold.reduce((s, i) => s + calcNetProfit(i), 0);
+  const agedCount = activeItems.filter((i) => {
+    const days = (today.getTime() - i.purchaseDate.getTime()) / 86_400_000;
+    return days > 90;
+  }).length;
 
-const revenueChange = formatChange(aprRevenue, marRevenue);
-const profitChange = formatChange(aprProfit, marProfit);
-const soldCountChange = formatChange(aprSold.length, marSold.length);
+  const avgDaysToSell = sales.length > 0
+    ? Math.round(
+        sales.reduce((s, x) => {
+          return s + (x.soldDate.getTime() - x.inventoryItem.purchaseDate.getTime()) / 86_400_000;
+        }, 0) / sales.length
+      )
+    : 0;
 
-// ─── Card config ─────────────────────────────────────────────────────────────
+  // ── Month-over-month: April vs March 2026 ────────────────────────────────
+  const aprSales = sales.filter((s) => s.soldDate.toISOString().startsWith("2026-04"));
+  const marSales = sales.filter((s) => s.soldDate.toISOString().startsWith("2026-03"));
 
-const metrics = [
-  {
-    label: "Total Revenue",
-    value: formatCurrency(totalRevenue),
-    change: revenueChange,
-    positive: aprRevenue >= marRevenue,
-  },
-  {
-    label: "Net Profit",
-    value: formatCurrency(totalNetProfit),
-    change: profitChange,
-    positive: aprProfit >= marProfit,
-  },
-  {
-    label: "Active Inventory Value",
-    value: formatCurrency(activeInventoryValue),
-    change: `${activeItems.length} items`,
-    positive: true,
-  },
-  {
-    label: "Items Sold",
-    value: String(itemsSoldCount),
-    change: soldCountChange,
-    positive: aprSold.length >= marSold.length,
-  },
-];
+  const aprRevenue = aprSales.reduce((s, x) => s + x.salePrice.toNumber(), 0);
+  const marRevenue = marSales.reduce((s, x) => s + x.salePrice.toNumber(), 0);
+  const aprProfit  = aprSales.reduce((s, x) => s + x.netProfit.toNumber(), 0);
+  const marProfit  = marSales.reduce((s, x) => s + x.netProfit.toNumber(), 0);
 
-// ─── Inventory status summary cards ──────────────────────────────────────────
+  const revenueChange   = formatChange(aprRevenue, marRevenue);
+  const profitChange    = formatChange(aprProfit, marProfit);
+  const soldCountChange = formatChange(aprSales.length, marSales.length);
 
-const statusCards = [
-  { label: "Active",   count: activeItems.length,                                    color: "text-emerald-600 bg-emerald-50" },
-  { label: "Sold",     count: soldItems.length,                                      color: "text-indigo-600 bg-indigo-50"  },
-  { label: "Draft",    count: inventory.filter((i) => i.status === "Draft").length,  color: "text-amber-600 bg-amber-50"    },
-  { label: "Archived", count: inventory.filter((i) => i.status === "Archived").length, color: "text-slate-500 bg-slate-100" },
-];
+  // ── Top metric cards ──────────────────────────────────────────────────────
+  const metrics = [
+    {
+      label:    "Total Revenue",
+      value:    formatCurrency(totalRevenue),
+      change:   revenueChange,
+      positive: aprRevenue >= marRevenue,
+    },
+    {
+      label:    "Net Profit",
+      value:    formatCurrency(totalNetProfit),
+      change:   profitChange,
+      positive: aprProfit >= marProfit,
+    },
+    {
+      label:    "Active Inventory Value",
+      value:    formatCurrency(activeInventoryValue),
+      change:   `${activeItems.length} items`,
+      positive: true,
+    },
+    {
+      label:    "Items Sold",
+      value:    String(itemsSoldCount),
+      change:   soldCountChange,
+      positive: aprSales.length >= marSales.length,
+    },
+  ];
 
-// ─── Recent sales (last 6 sold items by soldDate, newest first) ───────────────
+  // ── Status summary cards ──────────────────────────────────────────────────
+  const statusCards = [
+    { label: "Active",   count: activeItems.length, color: "text-emerald-600 bg-emerald-50" },
+    { label: "Sold",     count: soldCount,           color: "text-indigo-600 bg-indigo-50"  },
+    { label: "Draft",    count: draftCount,          color: "text-amber-600 bg-amber-50"    },
+    { label: "Archived", count: archivedCount,       color: "text-slate-500 bg-slate-100"   },
+  ];
 
-const recentSales = [...soldItems]
-  .sort((a, b) => (b.soldDate ?? "").localeCompare(a.soldDate ?? ""))
-  .slice(0, 6);
+  // ── Recent sales (getSales already orders by soldDate desc) ───────────────
+  const recentSales = sales.slice(0, 6);
 
-// ─── Component ───────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
 
-export default function DashboardPage() {
   return (
     <div>
       {/* Page heading */}
@@ -95,7 +107,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Metric cards */}
+      {/* Top metric cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {metrics.map((metric) => (
           <div
@@ -118,103 +130,136 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      {/* Secondary stats: Avg Margin + Inventory Aging */}
+      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <p className="text-sm font-medium text-slate-500">Avg Profit Margin</p>
+          <p className="text-3xl font-bold text-slate-900 mt-2">
+            {itemsSoldCount > 0 ? `${avgMargin.toFixed(1)}%` : "—"}
+          </p>
+          <p className="text-sm mt-2 text-slate-400 font-normal">
+            across {itemsSoldCount} sold item{itemsSoldCount !== 1 ? "s" : ""}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <p className="text-sm font-medium text-slate-500">Inventory Aging</p>
+          <p className="text-3xl font-bold text-slate-900 mt-2">
+            {itemsSoldCount > 0 ? `${avgDaysToSell}d` : "—"}
+          </p>
+          <p className="text-sm mt-2 text-slate-400 font-normal">
+            avg days to sell
+            {agedCount > 0 && (
+              <> · <span className="text-amber-500 font-medium">{agedCount} active item{agedCount !== 1 ? "s" : ""} aged &gt;90d</span></>
+            )}
+          </p>
+        </div>
+      </div>
+
       {/* Recent sales table */}
       <div className="mt-8 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100">
-          <h3 className="text-base font-semibold text-slate-800">
-            Recent Sales
-          </h3>
+          <h3 className="text-base font-semibold text-slate-800">Recent Sales</h3>
           <p className="text-xs text-slate-400 mt-0.5">
             Last {recentSales.length} sold items
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 text-left">
-                <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  Item
-                </th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  Platform
-                </th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">
-                  Sale Price
-                </th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">
-                  Net Profit
-                </th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">
-                  Margin
-                </th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">
-                  ROI
-                </th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">
-                  Days to Sell
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {recentSales.map((item) => {
-                const profit = calcNetProfit(item);
-                const margin = calcProfitMargin(item);
-                const roi = calcROI(item);
-                const age = calcInventoryAge(item);
-                const profitPositive = profit >= 0;
+        {recentSales.length === 0 ? (
+          <div className="px-6 py-12 text-center text-slate-400 text-sm">
+            No sales recorded yet. Mark items as sold to see them here.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-left">
+                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    Item
+                  </th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    Platform
+                  </th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">
+                    Sale Price
+                  </th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">
+                    Net Profit
+                  </th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">
+                    Margin
+                  </th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">
+                    ROI
+                  </th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">
+                    Days to Sell
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {recentSales.map((sale) => {
+                  const profit     = sale.netProfit.toNumber();
+                  // profitMargin and roi are stored as percentages (e.g. 25.5 = 25.5%)
+                  const margin     = sale.profitMargin.toNumber();
+                  const roi        = sale.roi.toNumber();
+                  const daysToSell = Math.floor(
+                    (sale.soldDate.getTime() - sale.inventoryItem.purchaseDate.getTime()) / 86_400_000
+                  );
 
-                return (
-                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                    {/* Item name + category */}
-                    <td className="px-6 py-3">
-                      <p className="font-medium text-slate-800 truncate max-w-[220px]">
-                        {item.itemName}
-                      </p>
-                      <p className="text-xs text-slate-400">{item.category}</p>
-                    </td>
+                  return (
+                    <tr key={sale.id} className="hover:bg-slate-50 transition-colors">
+                      {/* Item name + category */}
+                      <td className="px-6 py-3">
+                        <p className="font-medium text-slate-800 truncate max-w-[220px]">
+                          {sale.inventoryItem.itemName}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {sale.inventoryItem.category}
+                        </p>
+                      </td>
 
-                    {/* Platform badge */}
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-                        {item.platform}
-                      </span>
-                    </td>
+                      {/* Platform badge — uses the @map string ("Facebook Marketplace", etc.) */}
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                          {sale.platform}
+                        </span>
+                      </td>
 
-                    {/* Sale price */}
-                    <td className="px-4 py-3 text-right font-medium text-slate-800">
-                      {formatCurrency(item.salePrice ?? 0)}
-                    </td>
+                      {/* Sale price */}
+                      <td className="px-4 py-3 text-right font-medium text-slate-800">
+                        {formatCurrency(sale.salePrice.toNumber())}
+                      </td>
 
-                    {/* Net profit — green if positive, red if negative */}
-                    <td
-                      className={`px-4 py-3 text-right font-semibold ${
-                        profitPositive ? "text-emerald-600" : "text-red-500"
-                      }`}
-                    >
-                      {formatCurrency(profit)}
-                    </td>
+                      {/* Net profit */}
+                      <td
+                        className={`px-4 py-3 text-right font-semibold ${
+                          profit >= 0 ? "text-emerald-600" : "text-red-500"
+                        }`}
+                      >
+                        {formatCurrency(profit)}
+                      </td>
 
-                    {/* Margin */}
-                    <td className="px-4 py-3 text-right text-slate-600">
-                      {(margin * 100).toFixed(1)}%
-                    </td>
+                      {/* Margin — already stored as %, no ×100 needed */}
+                      <td className="px-4 py-3 text-right text-slate-600">
+                        {margin.toFixed(1)}%
+                      </td>
 
-                    {/* ROI */}
-                    <td className="px-4 py-3 text-right text-slate-600">
-                      {(roi * 100).toFixed(1)}%
-                    </td>
+                      {/* ROI — already stored as %, no ×100 needed */}
+                      <td className="px-4 py-3 text-right text-slate-600">
+                        {roi.toFixed(1)}%
+                      </td>
 
-                    {/* Days to sell */}
-                    <td className="px-4 py-3 text-right text-slate-500">
-                      {age}d
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      {/* Days to sell */}
+                      <td className="px-4 py-3 text-right text-slate-500">
+                        {daysToSell}d
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Inventory status summary */}
