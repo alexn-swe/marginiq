@@ -3,6 +3,7 @@
 // It converts all Prisma types (Decimal, Date) to plain numbers/strings before
 // passing them as props to the Client Component, which requires serializable data.
 
+import Link from "next/link";
 import { getInventoryItems } from "@/lib/db/inventory";
 import { Status } from "@prisma/client";
 import { formatCurrency } from "@/lib/mock-data";
@@ -16,11 +17,19 @@ export default async function InventoryPage() {
   } catch {
     return (
       <div>
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-slate-900">Inventory</h2>
-          <p className="text-slate-500 mt-1">
-            Manage and track all your resale inventory items.
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Inventory</h2>
+            <p className="text-slate-500 mt-1">
+              Manage and track all your resale inventory items.
+            </p>
+          </div>
+          <Link
+            href="/inventory/new"
+            className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            + Add Item
+          </Link>
         </div>
         <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
           <p className="text-red-700 font-medium">Could not load inventory.</p>
@@ -78,11 +87,19 @@ export default async function InventoryPage() {
   return (
     <div>
       {/* Page header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-900">Inventory</h2>
-        <p className="text-slate-500 mt-1">
-          Manage and track all your resale inventory items.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Inventory</h2>
+          <p className="text-slate-500 mt-1">
+            Manage and track all your resale inventory items.
+          </p>
+        </div>
+        <Link
+          href="/inventory/new"
+          className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+        >
+          + Add Item
+        </Link>
       </div>
 
       {/* Summary cards — static, rendered on the server */}
