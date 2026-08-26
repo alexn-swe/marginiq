@@ -1,115 +1,148 @@
 "use server";
 
-// This file contains the Server Action for creating a new inventory item.
-// "use server" at the top makes every exported function a Server Action —
-// they run on the server even though they are called from a Client Component.
+// Server Actions for creating and editing inventory items.
+// Both actions use the same validation so the two forms stay consistent.
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma, Category, Platform, Status } from "@prisma/client";
-import { createInventoryItem } from "@/lib/db/inventory";
+import {
+  createInventoryItem,
+  updateInventoryItem,
+  type CreateInventoryItemData,
+} from "@/lib/db/inventory";
 
-// The shape of state that useActionState tracks.
-// null  = no error (initial state, or after a successful redirect)
-// string = an error message to display in the form
-export type CreateItemState = string | null;
+export type ItemActionState = string | null;
+export type CreateItemState = ItemActionState;
 
-// createItemAction is called when the "Add Item" form is submitted.
-//
-// It receives:
-//   _prevState — the previous state from useActionState (we don't need it, so we prefix with _)
-//   formData   — all the form field values, sent automatically by the browser
-//
-// It returns:
-//   an error string  → the form re-renders with the error message shown
-//   (never returns)  → on success it calls redirect(), which throws internally
-//                      and navigates the browser to /inventory
-export async function createItemAction(
-  _prevState: CreateItemState,
-  formData: FormData
-): Promise<CreateItemState> {
-  // ── 1. Extract every field from the submitted form ─────────────────────────
-  // formData.get() returns FormDataEntryValue | null, so we cast to string | null
-  // and fall back to "" so the checks below are simple.
-  const itemName         = ((formData.get("itemName")      as string) ?? "").trim();
-  const sku              = ((formData.get("sku")           as string) ?? "").trim();
-  const category         =  (formData.get("category")      as string) ?? "";
-  const platform         =  (formData.get("platform")      as string) ?? "";
-  const purchasePriceRaw =  (formData.get("purchasePrice") as string) ?? "";
-  const listPriceRaw     =  (formData.get("listPrice")     as string) ?? "";
-  const status           =  (formData.get("status")        as string) ?? "";
-  const purchaseDateRaw  =  (formData.get("purchaseDate")  as string) ?? "";
-  const listedDateRaw    =  (formData.get("listedDate")    as string) ?? "";
+type ValidationResult =
+  | { data: CreateInventoryItemData; error: null }
+  | { data: null; error: string };
 
-  // ── 2. Required field validation ───────────────────────────────────────────
-  if (!itemName)         return "Item name is required.";
-  if (!sku)              return "SKU is required.";
-  if (!category)         return "Category is required.";
-  if (!platform)         return "Platform is required.";
-  if (!purchasePriceRaw) return "Purchase price is required.";
-  if (!listPriceRaw)     return "List price is required.";
-  if (!status)           return "Status is required.";
-  if (!purchaseDateRaw)  return "Purchase date is required.";
+function validateItemForm(formData: FormData): ValidationResult {
+  const itemName = ((formData.get("itemName") as string) ?? "").trim();
+  const sku = ((formData.get("sku") as string) ?? "").trim();
+  const category = (formData.get("category") as string) ?? "";
+  const platform = (formData.get("platform") as string) ?? "";
+  const purchasePriceRaw = (formData.get("purchasePrice") as string) ?? "";
+  const listPriceRaw = (formData.get("listPrice") as string) ?? "";
+  const status = (formData.get("status") as string) ?? "";
+  const purchaseDateRaw = (formData.get("purchaseDate") as string) ?? "";
+  const listedDateRaw = (formData.get("listedDate") as string) ?? "";
 
-  // ── 3. Validate enum values ────────────────────────────────────────────────
-  // Object.values(Category) gives ["Sneakers", "TradingCards", ...] at runtime.
-  // This guards against tampered or unexpected form values.
-  const validCategories = Object.values(Category) as string[];
-  const validPlatforms  = Object.values(Platform)  as string[];
-  const validStatuses   = Object.values(Status)    as string[];
-
-  if (!validCategories.includes(category)) return "Please select a valid category.";
-  if (!validPlatforms.includes(platform))  return "Please select a valid platform.";
-  if (!validStatuses.includes(status))     return "Please select a valid status.";
-
-  // ── 4. Validate money fields ───────────────────────────────────────────────
-  const purchasePrice = parseFloat(purchasePriceRaw);
-  const listPrice     = parseFloat(listPriceRaw);
-
-  if (!isFinite(purchasePrice) || purchasePrice <= 0) {
-    return "Purchase price must be a positive number.";
+  if (!itemName) return { data: null, error: "Item name is required." };
+  if (!sku) return { data: null, error: "SKU is required." };
+  if (!category) return { data: null, error: "Category is required." };
+  if (!platform) return { data: null, error: "Platform is required." };
+  if (!purchasePriceRaw) {
+    return { data: null, error: "Purchase price is required." };
   }
-  if (!isFinite(listPrice) || listPrice <= 0) {
-    return "List price must be a positive number.";
+  if (!listPriceRaw) return { data: null, error: "List price is required." };
+  if (!status) return { data: null, error: "Status is required." };
+  if (!purchaseDateRaw) {
+    return { data: null, error: "Purchase date is required." };
   }
 
-  // ── 5. Validate dates ──────────────────────────────────────────────────────
-  // The <input type="date"> sends "YYYY-MM-DD". new Date() parses it as UTC midnight.
+  if (!(Object.values(Category) as string[]).includes(category)) {
+    return { data: null, error: "Please select a valid category." };
+  }
+  if (!(Object.values(Platform) as string[]).includes(platform)) {
+    return { data: null, error: "Please select a valid platform." };
+  }
+  if (!(Object.values(Status) as string[]).includes(status)) {
+    return { data: null, error: "Please select a valid status." };
+  }
+
+  const purchasePrice = Number(purchasePriceRaw);
+  const listPrice = Number(listPriceRaw);
+
+  if (!Number.isFinite(purchasePrice) || purchasePrice <= 0) {
+    return { data: null, error: "Purchase price must be a positive number." };
+  }
+  if (!Number.isFinite(listPrice) || listPrice <= 0) {
+    return { data: null, error: "List price must be a positive number." };
+  }
+
   const purchaseDate = new Date(purchaseDateRaw);
-  if (isNaN(purchaseDate.getTime())) return "Purchase date is not a valid date.";
+  if (Number.isNaN(purchaseDate.getTime())) {
+    return { data: null, error: "Purchase date is not a valid date." };
+  }
 
   let listedDate: Date | null = null;
   if (listedDateRaw) {
     listedDate = new Date(listedDateRaw);
-    if (isNaN(listedDate.getTime())) return "Listed date is not a valid date.";
+    if (Number.isNaN(listedDate.getTime())) {
+      return { data: null, error: "Listed date is not a valid date." };
+    }
   }
 
-  // ── 6. Save to the database ────────────────────────────────────────────────
-  try {
-    await createInventoryItem({
+  return {
+    data: {
       itemName,
       sku,
-      category:      category as Category,
-      platform:      platform as Platform,
+      category: category as Category,
+      platform: platform as Platform,
       purchasePrice,
       listPrice,
-      status:        status   as Status,
+      status: status as Status,
       purchaseDate,
       listedDate,
-    });
-  } catch (e) {
-    // P2002 is Prisma's error code for a unique constraint violation.
-    // Our schema has @@unique([userId, sku]), so this fires when the SKU is a duplicate.
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return `An item with SKU "${sku}" already exists in your inventory.`;
-    }
-    return "Could not save the item. Please try again.";
+    },
+    error: null,
+  };
+}
+
+function getSaveError(error: unknown, sku: string): string {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  ) {
+    return `An item with SKU "${sku}" already exists in your inventory.`;
   }
 
-  // ── 7. Success — clear the cache and send the user back to /inventory ──────
-  // revalidatePath tells Next.js to re-fetch /inventory so the new row appears.
-  // redirect() throws a special Next.js exception that the framework catches and
-  // turns into a client-side navigation — code after it never runs.
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2025"
+  ) {
+    return "That inventory item could not be found.";
+  }
+
+  return "Could not save the item. Please try again.";
+}
+
+export async function createItemAction(
+  _previousState: CreateItemState,
+  formData: FormData
+): Promise<CreateItemState> {
+  const result = validateItemForm(formData);
+  if (result.data === null) return result.error;
+
+  try {
+    await createInventoryItem(result.data);
+  } catch (error) {
+    return getSaveError(error, result.data.sku);
+  }
+
   revalidatePath("/inventory");
+  revalidatePath("/dashboard");
   redirect("/inventory");
+}
+
+export async function updateItemAction(
+  id: string,
+  _previousState: ItemActionState,
+  formData: FormData
+): Promise<ItemActionState> {
+  const result = validateItemForm(formData);
+  if (result.data === null) return result.error;
+
+  try {
+    await updateInventoryItem(id, result.data);
+  } catch (error) {
+    return getSaveError(error, result.data.sku);
+  }
+
+  revalidatePath("/inventory");
+  revalidatePath("/dashboard");
+  redirect("/inventory?updated=1");
 }

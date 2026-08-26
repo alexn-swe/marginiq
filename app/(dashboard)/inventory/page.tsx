@@ -9,7 +9,12 @@ import { Status } from "@prisma/client";
 import { formatCurrency } from "@/lib/mock-data";
 import InventoryTable, { type InventoryRow } from "./InventoryTable";
 
-export default async function InventoryPage() {
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ updated?: string }>;
+}) {
+  const { updated } = await searchParams;
   // Fetch all inventory items for the demo user, each with its linked Sale.
   let items;
   try {
@@ -103,6 +108,12 @@ export default async function InventoryPage() {
       </div>
 
       {/* Summary cards — static, rendered on the server */}
+      {updated === "1" && (
+        <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+          Inventory item updated successfully.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
           <p className="text-sm text-slate-500">Total Items</p>

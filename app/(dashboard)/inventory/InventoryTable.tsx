@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import SortArrow from "@/app/components/SortArrow";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -211,19 +212,22 @@ export default function InventoryTable({ items }: { items: InventoryRow[] }) {
                   Est. Profit
                   <SortArrow field="estimatedProfit" sortField={sortField} sortDir={sortDir} />
                 </th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">
+                  Actions
+                </th>
               </tr>
             </thead>
 
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-slate-400 text-sm">
+                  <td colSpan={10} className="text-center py-12 text-slate-400 text-sm">
                     No inventory items yet. Add your first item to get started.
                   </td>
                 </tr>
               ) : sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-slate-400 text-sm">
+                  <td colSpan={10} className="text-center py-12 text-slate-400 text-sm">
                     No items match your search or filters.
                   </td>
                 </tr>
@@ -299,6 +303,14 @@ export default function InventoryTable({ items }: { items: InventoryRow[] }) {
                           : item.listPrice > 0
                           ? `~${formatCurrency(item.estimatedProfit)}`
                           : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <Link
+                          href={`/inventory/${item.id}/edit`}
+                          className="font-medium text-indigo-600 hover:text-indigo-800"
+                        >
+                          Edit
+                        </Link>
                       </td>
                     </tr>
                   );
