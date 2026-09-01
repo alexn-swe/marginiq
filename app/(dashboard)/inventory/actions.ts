@@ -8,12 +8,19 @@ import { redirect } from "next/navigation";
 import { Prisma, Category, Platform, Status } from "@prisma/client";
 import {
   createInventoryItem,
+  archiveInventoryItem,
+  deleteInventoryItem,
   updateInventoryItem,
   type CreateInventoryItemData,
 } from "@/lib/db/inventory";
 
 export type ItemActionState = string | null;
 export type CreateItemState = ItemActionState;
+
+export type InventoryRowActionResult = {
+  success: boolean;
+  message: string;
+};
 
 type ValidationResult =
   | { data: CreateInventoryItemData; error: null }
@@ -145,4 +152,53 @@ export async function updateItemAction(
   revalidatePath("/inventory");
   revalidatePath("/dashboard");
   redirect("/inventory?updated=1");
+}
+
+export async function archiveItemAction(
+  id: string
+): Promise<InventoryRowActionResult> {
+  if (!id) return { success: false, message: "That inventory item could not be found." };
+
+  try {
+    const result = await archiveInventoryItem(id);
+
+    if (result === "not-found") {
+      return { success: false, message: "That inventory item could not be found." };
+    }
+    if (result === "not-eligible") {
+      return { success: false, message: "Only Active or Draft items can be archived." };
+    }
+  } catch {
+    return { success: false, message: "Could not archive the item. Please try again." };
+  }
+
+  revalidatePath("/inventory");
+  revalidatePath("/dashboard");
+  return { success: true, message: "Inventory item archived." };
+}
+
+export async function deleteItemAction(
+  id: string
+): Promise<InventoryRowActionResult> {
+  if (!id) return { success: false, message: "That inventory item could not be found." };
+
+  try {
+    const result = await deleteInventoryItem(id);
+
+    if (result === "not-found") {
+      return { success: false, message: "That inventory item could not be found." };
+    }
+    if (result === "has-sale") {
+      return { success: false, message: "This item cannot be deleted because it has a sale record." };
+    }
+    if (result === "not-eligible") {
+      return { success: false, message: "Only Draft or Archived items can be deleted." };
+    }
+  } catch {
+    return { success: false, message: "Could not delete the item. Please try again." };
+  }
+
+  revalidatePath("/inventory");
+  revalidatePath("/dashboard");
+  return { success: true, message: "Inventory item permanently deleted." };
 }

@@ -78,20 +78,49 @@ export async function updateInventoryItem(
 
 // Sets an item's status to Archived. A shortcut for updateInventoryItem.
 export async function archiveInventoryItem(id: string) {
-  return updateInventoryItem(id, { status: Status.Archived });
+  const result = await prisma.inventoryItem.updateMany({
+    where: {
+      id,
+      userId: DEMO_USER_ID,
+      status: { in: [Status.Active, Status.Draft] },
+    },
+    data: { status: Status.Archived },
+  });
+
+  if (result.count === 1) return "archived" as const;
+
+  const item = await prisma.inventoryItem.findFirst({
+    where: { id, userId: DEMO_USER_ID },
+    select: { status: true },
+  });
+
+  return item ? ("not-eligible" as const) : ("not-found" as const);
 }
 
-// Permanently deletes an inventory item and its linked Sale (if one exists).
-// The sale must be deleted first to satisfy the foreign key constraint.
+// Permanently deletes a Draft or Archived item only when it has no sale.
+// The checks and delete share a transaction so they are enforced server-side.
 export async function deleteInventoryItem(id: string) {
   return prisma.$transaction(async (tx) => {
-    // Delete the linked sale first so the foreign key constraint is not violated.
-    await tx.sale.deleteMany({
-      where: { inventoryItemId: id, userId: DEMO_USER_ID },
+    const item = await tx.inventoryItem.findFirst({
+      where: { id, userId: DEMO_USER_ID },
+      select: { status: true, sale: { select: { id: true } } },
     });
 
-    return tx.inventoryItem.delete({
-      where: { id, userId: DEMO_USER_ID },
+    if (!item) return "not-found" as const;
+    if (item.sale) return "has-sale" as const;
+    if (item.status !== Status.Draft && item.status !== Status.Archived) {
+      return "not-eligible" as const;
+    }
+
+    const result = await tx.inventoryItem.deleteMany({
+      where: {
+        id,
+        userId: DEMO_USER_ID,
+        status: { in: [Status.Draft, Status.Archived] },
+        sale: null,
+      },
     });
+
+    return result.count === 1 ? ("deleted" as const) : ("not-eligible" as const);
   });
 }

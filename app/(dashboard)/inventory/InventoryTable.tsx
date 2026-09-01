@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import SortArrow from "@/app/components/SortArrow";
+import { archiveItemAction, deleteItemAction } from "./actions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 // All fields are plain primitives (number, string, boolean) so they can be
@@ -65,12 +67,43 @@ type SortDir = "asc" | "desc";
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function InventoryTable({ items }: { items: InventoryRow[] }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [platformFilter, setPlatformFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [sortField, setSortField] = useState<SortField>("purchasePrice");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [pendingItemId, setPendingItemId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<InventoryRow | null>(null);
+  const [notice, setNotice] = useState<{ success: boolean; message: string } | null>(null);
+
+  function runArchive(item: InventoryRow) {
+    setNotice(null);
+    setPendingItemId(item.id);
+    startTransition(async () => {
+      const result = await archiveItemAction(item.id);
+      setNotice(result);
+      setPendingItemId(null);
+      if (result.success) router.refresh();
+    });
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+
+    const item = deleteTarget;
+    setNotice(null);
+    setPendingItemId(item.id);
+    startTransition(async () => {
+      const result = await deleteItemAction(item.id);
+      setNotice(result);
+      setPendingItemId(null);
+      setDeleteTarget(null);
+      if (result.success) router.refresh();
+    });
+  }
 
   // Apply search and filters
   const query = search.toLowerCase();
@@ -109,6 +142,18 @@ export default function InventoryTable({ items }: { items: InventoryRow[] }) {
 
   return (
     <>
+      {notice && (
+        <div
+          role="status"
+          className={`mb-4 rounded-lg border p-3 text-sm ${
+            notice.success
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {notice.message}
+        </div>
+      )}
       {/* Search + Filters */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-4">
         <div className="flex flex-col sm:flex-row gap-3">
@@ -305,12 +350,34 @@ export default function InventoryTable({ items }: { items: InventoryRow[] }) {
                           : "—"}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <Link
-                          href={`/inventory/${item.id}/edit`}
-                          className="font-medium text-indigo-600 hover:text-indigo-800"
-                        >
-                          Edit
-                        </Link>
+                        <div className="flex items-center justify-end gap-3">
+                          <Link
+                            href={`/inventory/${item.id}/edit`}
+                            className="font-medium text-indigo-600 hover:text-indigo-800"
+                          >
+                            Edit
+                          </Link>
+                          {(item.status === "Active" || item.status === "Draft") && (
+                            <button
+                              type="button"
+                              onClick={() => runArchive(item)}
+                              disabled={isPending}
+                              className="font-medium text-slate-600 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {pendingItemId === item.id && isPending ? "Archiving…" : "Archive"}
+                            </button>
+                          )}
+                          {(item.status === "Draft" || item.status === "Archived") && (
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(item)}
+                              disabled={isPending}
+                              className="font-medium text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -327,6 +394,45 @@ export default function InventoryTable({ items }: { items: InventoryRow[] }) {
           </div>
         )}
       </div>
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-item-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isPending) setDeleteTarget(null);
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h3 id="delete-item-title" className="text-lg font-semibold text-slate-900">
+              Permanently delete this item?
+            </h3>
+            <p className="mt-2 text-sm text-slate-600">
+              “{deleteTarget.itemName}” ({deleteTarget.sku}) will be permanently removed. This action cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isPending}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={isPending}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isPending ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
