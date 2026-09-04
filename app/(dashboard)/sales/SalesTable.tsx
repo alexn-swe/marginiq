@@ -57,9 +57,11 @@ function formatCurrency(value: number): string {
 export default function SalesTable({
   sales,
   summary,
+  saleCreated = false,
 }: {
   sales: SalesRow[];
   summary: SalesSummary;
+  saleCreated?: boolean;
 }) {
   const [platformFilter, setPlatformFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -107,6 +109,12 @@ export default function SalesTable({
           All sold items with full profit and margin breakdowns.
         </p>
       </div>
+
+      {saleCreated && (
+        <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+          Sale recorded successfully.
+        </div>
+      )}
 
       {/* Summary cards always reflect the complete database result. */}
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">

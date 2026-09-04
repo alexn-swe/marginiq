@@ -351,6 +351,14 @@ export default function InventoryTable({ items }: { items: InventoryRow[] }) {
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-3">
+                          {item.status === "Active" && (
+                            <Link
+                              href={`/inventory/${item.id}/sell`}
+                              className="font-medium text-emerald-600 hover:text-emerald-800"
+                            >
+                              Mark Sold
+                            </Link>
+                          )}
                           <Link
                             href={`/inventory/${item.id}/edit`}
                             className="font-medium text-indigo-600 hover:text-indigo-800"

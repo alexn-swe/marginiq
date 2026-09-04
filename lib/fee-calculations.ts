@@ -24,6 +24,19 @@ export interface MarketplaceFees {
   payout: number;
 }
 
+export interface SaleFinancials extends MarketplaceFees {
+  /** Marketplace shipping fee plus any additional seller-paid shipping */
+  shippingCost: number;
+  /** Seller payout after every fee and shipping cost */
+  payout: number;
+  /** Payout minus the item's purchase price */
+  netProfit: number;
+  /** Net profit as a percentage of sale price */
+  profitMargin: number;
+  /** Net profit as a percentage of purchase price */
+  roi: number;
+}
+
 // ─── Main calculator ──────────────────────────────────────────────────────────
 
 /**
@@ -66,6 +79,7 @@ export function calculateMarketplaceFees(
       break;
 
     case "Facebook Marketplace":
+    case "FacebookMarketplace":
       // Local cash sales — no platform fees or payment processing
       platformFee = 0;
       paymentFee  = 0;
@@ -91,7 +105,49 @@ export function calculateMarketplaceFees(
   };
 }
 
+/**
+ * Calculates every financial value stored on a Sale record.
+ * `sellerShipping` is an additional out-of-pocket shipping cost entered by
+ * the seller. Platform-controlled shipping fees are added automatically.
+ */
+export function calculateSaleFinancials(
+  platform: string,
+  salePrice: number,
+  purchasePrice: number,
+  sellerShipping = 0
+): SaleFinancials {
+  const marketplaceFees = calculateMarketplaceFees(platform, salePrice);
+  const shippingCost = round2(
+    marketplaceFees.shippingFee + sellerShipping
+  );
+  const totalFees = round2(
+    shippingCost + marketplaceFees.platformFee + marketplaceFees.paymentFee
+  );
+  const payout = round2(salePrice - totalFees);
+  const netProfit = round2(payout - purchasePrice);
+  const profitMargin =
+    salePrice > 0 ? round4((netProfit / salePrice) * 100) : 0;
+  const roi =
+    purchasePrice > 0 ? round4((netProfit / purchasePrice) * 100) : 0;
+
+  return {
+    platformFee: marketplaceFees.platformFee,
+    paymentFee: marketplaceFees.paymentFee,
+    shippingFee: marketplaceFees.shippingFee,
+    shippingCost,
+    totalFees,
+    payout,
+    netProfit,
+    profitMargin,
+    roi,
+  };
+}
+
 // Round to 2 decimal places to avoid floating-point noise in dollar amounts
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+function round4(n: number): number {
+  return Math.round(n * 10000) / 10000;
 }

@@ -1,7 +1,12 @@
 import { getSales } from "@/lib/db/sales";
 import SalesTable, { type SalesRow, type SalesSummary } from "./SalesTable";
 
-export default async function SalesPage() {
+export default async function SalesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sold?: string }>;
+}) {
+  const { sold } = await searchParams;
   let sales;
 
   try {
@@ -55,5 +60,11 @@ export default async function SalesPage() {
     itemsSold: rows.length,
   };
 
-  return <SalesTable sales={rows} summary={summary} />;
+  return (
+    <SalesTable
+      sales={rows}
+      summary={summary}
+      saleCreated={sold === "1"}
+    />
+  );
 }

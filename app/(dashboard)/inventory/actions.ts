@@ -13,6 +13,10 @@ import {
   updateInventoryItem,
   type CreateInventoryItemData,
 } from "@/lib/db/inventory";
+import {
+  createSale,
+  SaleCreationError,
+} from "@/lib/db/sales";
 
 export type ItemActionState = string | null;
 export type CreateItemState = ItemActionState;
@@ -201,4 +205,77 @@ export async function deleteItemAction(
   revalidatePath("/inventory");
   revalidatePath("/dashboard");
   return { success: true, message: "Inventory item permanently deleted." };
+}
+
+export async function createSaleAction(
+  inventoryItemId: string,
+  _previousState: ItemActionState,
+  formData: FormData
+): Promise<ItemActionState> {
+  if (!inventoryItemId) return "That inventory item could not be found.";
+
+  const platform = (formData.get("platform") as string) ?? "";
+  const salePriceRaw = (formData.get("salePrice") as string) ?? "";
+  const shippingCostRaw = (formData.get("shippingCost") as string) ?? "";
+  const soldDateRaw = (formData.get("soldDate") as string) ?? "";
+
+  if (!(Object.values(Platform) as string[]).includes(platform)) {
+    return "Please select a valid platform.";
+  }
+  if (!salePriceRaw) return "Sale price is required.";
+  if (!soldDateRaw) return "Sold date is required.";
+
+  const salePrice = Number(salePriceRaw);
+  const shippingCost = shippingCostRaw ? Number(shippingCostRaw) : 0;
+
+  if (!Number.isFinite(salePrice) || salePrice <= 0) {
+    return "Sale price must be greater than zero.";
+  }
+  if (!Number.isFinite(shippingCost) || shippingCost < 0) {
+    return "Shipping cost must be zero or a positive number.";
+  }
+
+  const soldDate = new Date(soldDateRaw);
+  if (Number.isNaN(soldDate.getTime())) {
+    return "Sold date is not a valid date.";
+  }
+
+  try {
+    await createSale({
+      inventoryItemId,
+      platform: platform as Platform,
+      salePrice,
+      shippingCost,
+      soldDate,
+    });
+  } catch (error) {
+    if (error instanceof SaleCreationError) {
+      if (error.code === "not-found") {
+        return "That inventory item could not be found.";
+      }
+      if (error.code === "duplicate-sale") {
+        return "This inventory item already has a sale record.";
+      }
+      if (error.code === "not-eligible") {
+        return "Only Active inventory items can be marked as sold.";
+      }
+      if (error.code === "invalid-purchase-price") {
+        return "This item does not have a valid purchase price.";
+      }
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return "This inventory item already has a sale record.";
+    }
+
+    return "Could not create the sale. Please try again.";
+  }
+
+  revalidatePath("/inventory");
+  revalidatePath("/sales");
+  revalidatePath("/dashboard");
+  redirect("/sales?sold=1");
 }
