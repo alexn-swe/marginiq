@@ -1,23 +1,42 @@
-import {
-  type InventoryItem,
-  type Platform,
-  type Category,
-  calcNetProfit,
-  calcROI,
-  calcInventoryAge,
-  getSoldItems,
-} from "./mock-data";
+// Pure aggregation helpers for the database-backed Analytics page.
+// Inputs use plain numbers and Date objects so this module stays independent
+// from Prisma and can be tested without a database connection.
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+export interface AnalyticsSaleInput {
+  platform: string;
+  salePrice: number;
+  netProfit: number;
+  profitMargin: number;
+  roi: number;
+  soldDate: Date;
+  inventoryItem: {
+    category: string;
+  };
+}
+
+export interface AnalyticsInventoryInput {
+  purchaseDate: Date;
+  sale: {
+    soldDate: Date;
+  } | null;
+}
+
+export interface MonthlyStat {
+  month: string;
+  yearMonth: string;
+  revenue: number;
+  profit: number;
+  margin: number;
+}
 
 export interface PlatformStat {
-  platform: Platform;
+  platform: string;
   revenue: number;
   profit: number;
 }
 
 export interface CategoryStat {
-  category: Category;
+  category: string;
   revenue: number;
   profit: number;
 }
@@ -27,90 +46,201 @@ export interface AgingBucket {
   count: number;
 }
 
-// ─── Chart data helpers ───────────────────────────────────────────────────────
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
-/** Revenue and profit grouped by platform, sorted highest revenue first. */
-export function getPlatformStats(items: InventoryItem[]): PlatformStat[] {
-  const sold = getSoldItems(items);
-  const map: Partial<Record<Platform, PlatformStat>> = {};
+const PLATFORM_DISPLAY: Record<string, string> = {
+  FacebookMarketplace: "Facebook Marketplace",
+};
 
-  for (const item of sold) {
-    if (!map[item.platform]) {
-      map[item.platform] = { platform: item.platform, revenue: 0, profit: 0 };
-    }
-    map[item.platform]!.revenue += item.salePrice ?? 0;
-    map[item.platform]!.profit += calcNetProfit(item);
+const CATEGORY_DISPLAY: Record<string, string> = {
+  TradingCards: "Trading Cards",
+};
+
+/** Creates a rolling 12-month series ending in the current month. */
+export function getMonthlyStats(
+  sales: AnalyticsSaleInput[],
+  today = new Date()
+): MonthlyStat[] {
+  const months = Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(
+      Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 11 + index, 1)
+    );
+    const year = date.getUTCFullYear();
+    const monthIndex = date.getUTCMonth();
+    const yearMonth = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+
+    return {
+      month: `${MONTH_NAMES[monthIndex]} '${String(year).slice(-2)}`,
+      yearMonth,
+      revenue: 0,
+      profit: 0,
+      marginTotal: 0,
+      saleCount: 0,
+    };
+  });
+
+  const monthByKey = new Map(months.map((month) => [month.yearMonth, month]));
+
+  for (const sale of sales) {
+    const key = toYearMonth(sale.soldDate);
+    const month = monthByKey.get(key);
+    if (!month) continue;
+
+    month.revenue += sale.salePrice;
+    month.profit += sale.netProfit;
+    month.marginTotal += sale.profitMargin;
+    month.saleCount += 1;
   }
 
-  return Object.values(map as Record<Platform, PlatformStat>).sort(
-    (a, b) => b.revenue - a.revenue
-  );
+  return months.map((month) => ({
+    month: month.month,
+    yearMonth: month.yearMonth,
+    revenue: round2(month.revenue),
+    profit: round2(month.profit),
+    margin:
+      month.saleCount > 0 ? month.marginTotal / month.saleCount : 0,
+  }));
 }
 
-/** Revenue and profit grouped by category, sorted highest profit first. */
-export function getCategoryStats(items: InventoryItem[]): CategoryStat[] {
-  const sold = getSoldItems(items);
-  const map: Partial<Record<Category, CategoryStat>> = {};
+/** Revenue and profit grouped by sale platform, highest revenue first. */
+export function getPlatformStats(
+  sales: AnalyticsSaleInput[]
+): PlatformStat[] {
+  const totals = new Map<string, PlatformStat>();
 
-  for (const item of sold) {
-    if (!map[item.category]) {
-      map[item.category] = { category: item.category, revenue: 0, profit: 0 };
-    }
-    map[item.category]!.revenue += item.salePrice ?? 0;
-    map[item.category]!.profit += calcNetProfit(item);
+  for (const sale of sales) {
+    const platform = PLATFORM_DISPLAY[sale.platform] ?? sale.platform;
+    const current = totals.get(platform) ?? {
+      platform,
+      revenue: 0,
+      profit: 0,
+    };
+
+    current.revenue += sale.salePrice;
+    current.profit += sale.netProfit;
+    totals.set(platform, current);
   }
 
-  return Object.values(map as Record<Category, CategoryStat>).sort(
-    (a, b) => b.profit - a.profit
-  );
+  return [...totals.values()]
+    .map((stat) => ({
+      ...stat,
+      revenue: round2(stat.revenue),
+      profit: round2(stat.profit),
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
 }
 
-/**
- * Bucketed inventory aging: how many items fall into each age band.
- * Uses all items (sold and unsold) so the chart reflects the full picture.
- */
-export function getInventoryAgingBuckets(items: InventoryItem[]): AgingBucket[] {
-  const buckets: Record<string, number> = {
-    "0–30d": 0,
-    "31–60d": 0,
-    "61–90d": 0,
-    "90d+": 0,
-  };
+/** Revenue and profit grouped by the related inventory item's category. */
+export function getCategoryStats(
+  sales: AnalyticsSaleInput[]
+): CategoryStat[] {
+  const totals = new Map<string, CategoryStat>();
+
+  for (const sale of sales) {
+    const category =
+      CATEGORY_DISPLAY[sale.inventoryItem.category] ??
+      sale.inventoryItem.category;
+    const current = totals.get(category) ?? {
+      category,
+      revenue: 0,
+      profit: 0,
+    };
+
+    current.revenue += sale.salePrice;
+    current.profit += sale.netProfit;
+    totals.set(category, current);
+  }
+
+  return [...totals.values()]
+    .map((stat) => ({
+      ...stat,
+      revenue: round2(stat.revenue),
+      profit: round2(stat.profit),
+    }))
+    .sort((a, b) => b.profit - a.profit);
+}
+
+/** Purchase-to-sale age for sold items; purchase-to-today age otherwise. */
+export function getInventoryAge(
+  item: AnalyticsInventoryInput,
+  today = new Date()
+): number {
+  const endDate = item.sale?.soldDate ?? today;
+  const age = Math.floor(
+    (endDate.getTime() - item.purchaseDate.getTime()) / 86_400_000
+  );
+
+  return Math.max(0, age);
+}
+
+export function getInventoryAgingBuckets(
+  items: AnalyticsInventoryInput[],
+  today = new Date()
+): AgingBucket[] {
+  const buckets = [
+    { label: "0–30d", count: 0 },
+    { label: "31–60d", count: 0 },
+    { label: "61–90d", count: 0 },
+    { label: "90d+", count: 0 },
+  ];
 
   for (const item of items) {
-    const age = calcInventoryAge(item);
-    if (age <= 30) buckets["0–30d"]++;
-    else if (age <= 60) buckets["31–60d"]++;
-    else if (age <= 90) buckets["61–90d"]++;
-    else buckets["90d+"]++;
+    const age = getInventoryAge(item, today);
+    if (age <= 30) buckets[0].count += 1;
+    else if (age <= 60) buckets[1].count += 1;
+    else if (age <= 90) buckets[2].count += 1;
+    else buckets[3].count += 1;
   }
 
-  return Object.entries(buckets).map(([label, count]) => ({ label, count }));
+  return buckets;
 }
 
-// ─── Summary card helpers ─────────────────────────────────────────────────────
-
-/** Platform with the highest total revenue from sold items. */
-export function getBestPlatform(items: InventoryItem[]): string {
-  return getPlatformStats(items)[0]?.platform ?? "—";
+export function getAverageROI(sales: AnalyticsSaleInput[]): number | null {
+  if (sales.length === 0) return null;
+  return sales.reduce((sum, sale) => sum + sale.roi, 0) / sales.length;
 }
 
-/** Category with the highest total net profit from sold items. */
-export function getBestCategory(items: InventoryItem[]): string {
-  return getCategoryStats(items)[0]?.category ?? "—";
+export function getAverageInventoryAge(
+  items: AnalyticsInventoryInput[],
+  today = new Date()
+): number | null {
+  if (items.length === 0) return null;
+
+  const totalAge = items.reduce(
+    (sum, item) => sum + getInventoryAge(item, today),
+    0
+  );
+  return totalAge / items.length;
 }
 
-/** Mean ROI across all sold items (as a 0–1 decimal). */
-export function getAverageROI(items: InventoryItem[]): number {
-  const sold = getSoldItems(items);
-  if (sold.length === 0) return 0;
-  const total = sold.reduce((sum, item) => sum + calcROI(item), 0);
-  return total / sold.length;
+export function getBestPlatform(stats: PlatformStat[]): string {
+  return stats[0]?.platform ?? "—";
 }
 
-/** Mean inventory age in days across all items. */
-export function getAverageInventoryAge(items: InventoryItem[]): number {
-  if (items.length === 0) return 0;
-  const total = items.reduce((sum, item) => sum + calcInventoryAge(item), 0);
-  return total / items.length;
+export function getBestCategory(stats: CategoryStat[]): string {
+  return stats[0]?.category ?? "—";
+}
+
+function toYearMonth(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(
+    2,
+    "0"
+  )}`;
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
