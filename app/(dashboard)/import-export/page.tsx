@@ -1,12 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import {
-  inventory,
-  calcNetProfit,
-  calcProfitMargin,
-  getSoldItems,
-} from "@/lib/mock-data";
 
 // ─── CSV utilities ────────────────────────────────────────────────────────────
 
@@ -35,90 +29,6 @@ function triggerDownload(filename: string, csv: string): void {
 }
 
 // ─── Export generators ────────────────────────────────────────────────────────
-
-function exportInventory() {
-  const headers = [
-    "itemName", "sku", "category", "platform",
-    "purchasePrice", "listPrice", "salePrice",
-    "shippingCost", "platformFee", "paymentFee",
-    "status", "purchaseDate", "listedDate", "soldDate",
-  ];
-  const rows = inventory.map((i) => [
-    i.itemName, i.sku, i.category, i.platform,
-    i.purchasePrice, i.listPrice, i.salePrice,
-    i.shippingCost, i.platformFee, i.paymentFee,
-    i.status, i.purchaseDate, i.listedDate, i.soldDate,
-  ]);
-  triggerDownload("marginiq-inventory.csv", toCSV([headers, ...rows]));
-}
-
-function exportSales() {
-  const sold = getSoldItems(inventory);
-  const headers = [
-    "itemName", "sku", "category", "platform",
-    "salePrice", "purchasePrice", "shippingCost",
-    "platformFee", "paymentFee", "netProfit", "marginPct", "soldDate",
-  ];
-  const rows = sold.map((i) => [
-    i.itemName, i.sku, i.category, i.platform,
-    i.salePrice, i.purchasePrice, i.shippingCost,
-    i.platformFee, i.paymentFee,
-    calcNetProfit(i).toFixed(2),
-    (calcProfitMargin(i) * 100).toFixed(1),
-    i.soldDate,
-  ]);
-  triggerDownload("marginiq-sales.csv", toCSV([headers, ...rows]));
-}
-
-function exportProfitReport() {
-  const sold = getSoldItems(inventory);
-  const totalRevenue = sold.reduce((s, i) => s + (i.salePrice ?? 0), 0);
-  const totalProfit = sold.reduce((s, i) => s + calcNetProfit(i), 0);
-  const totalCOGS = sold.reduce((s, i) => s + i.purchasePrice, 0);
-  const totalFees = sold.reduce(
-    (s, i) => s + i.shippingCost + i.platformFee + i.paymentFee,
-    0
-  );
-
-  const byCategory = new Map<string, { revenue: number; profit: number; count: number }>();
-  for (const item of sold) {
-    const e = byCategory.get(item.category) ?? { revenue: 0, profit: 0, count: 0 };
-    byCategory.set(item.category, {
-      revenue: e.revenue + (item.salePrice ?? 0),
-      profit: e.profit + calcNetProfit(item),
-      count: e.count + 1,
-    });
-  }
-
-  const rows: (string | number)[][] = [
-    ["MarginIQ Profit Report"],
-    ["Generated", new Date().toISOString().split("T")[0]],
-    [],
-    ["── Summary ──"],
-    ["Total Items Sold", sold.length],
-    ["Total Revenue", `$${totalRevenue.toFixed(2)}`],
-    ["Cost of Goods Sold", `$${totalCOGS.toFixed(2)}`],
-    ["Total Fees", `$${totalFees.toFixed(2)}`],
-    ["Net Profit", `$${totalProfit.toFixed(2)}`],
-    [
-      "Avg Margin",
-      totalRevenue
-        ? `${((totalProfit / totalRevenue) * 100).toFixed(1)}%`
-        : "0%",
-    ],
-    [],
-    ["── Breakdown by Category ──"],
-    ["Category", "Items Sold", "Revenue", "Net Profit", "Margin %"],
-    ...[...byCategory.entries()].map(([cat, d]) => [
-      cat,
-      d.count,
-      `$${d.revenue.toFixed(2)}`,
-      `$${d.profit.toFixed(2)}`,
-      `${((d.profit / d.revenue) * 100).toFixed(1)}%`,
-    ]),
-  ];
-  triggerDownload("marginiq-profit-report.csv", toCSV(rows));
-}
 
 function downloadSample() {
   const headers = [
@@ -162,26 +72,24 @@ const COLUMNS = [
   { name: "soldDate",      desc: "ISO 8601 date — leave blank if not sold" },
 ];
 
-const soldCount = getSoldItems(inventory).length;
-
 const EXPORTS = [
   {
     title: "Inventory CSV",
     desc: "All items with purchase price, list price, fees, and current status.",
-    count: `${inventory.length} items`,
-    action: exportInventory,
+    count: "All items",
+    href: "/api/exports/inventory",
   },
   {
     title: "Sales CSV",
     desc: "Sold items with net profit, margin percentage, and sale date.",
-    count: `${soldCount} sales`,
-    action: exportSales,
+    count: "All sales",
+    href: "/api/exports/sales",
   },
   {
     title: "Profit Report CSV",
     desc: "Summary totals and category breakdown of revenue and net profit.",
     count: "Summary + breakdown",
-    action: exportProfitReport,
+    href: "/api/exports/profit",
   },
 ];
 
@@ -262,12 +170,12 @@ export default function ImportExportPage() {
         </svg>
         <div>
           <p className="text-sm font-semibold text-indigo-900">
-            Database integration coming soon
+            Database exports ready
           </p>
           <p className="text-sm text-indigo-700 mt-0.5">
-            CSV import will validate and stage your inventory for review before
-            saving. Exports currently use mock data. Both will connect to your
-            live database in the next release.
+            Exports use your current PostgreSQL inventory and sales data. CSV
+            import currently validates the selected file; saving imported rows
+            will be added in a later update.
           </p>
         </div>
       </div>
@@ -477,8 +385,8 @@ export default function ImportExportPage() {
                 <span className="text-xs font-medium text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">
                   {exp.count}
                 </span>
-                <button
-                  onClick={exp.action}
+                <a
+                  href={exp.href}
                   className="flex items-center gap-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1.5 transition-colors"
                 >
                   <svg
@@ -495,7 +403,7 @@ export default function ImportExportPage() {
                     />
                   </svg>
                   Download
-                </button>
+                </a>
               </div>
             </div>
           ))}
